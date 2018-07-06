@@ -1,0 +1,95 @@
+Machine Learning Project
+==========
+Author: Hannah Hon
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+### Library
+```{r}
+library(caret)
+library(rpart)
+library(rattle)
+```
+
+### Getting and Cleaning Data
+```{r}
+train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+train <- download.file(train,"./data")
+training <- read.csv("train")
+test <- download.file(test, "./test")
+testing <- read.csv("test")
+## remove the invalid columes
+training <- training[,colSums(is.na(training)) == 0]
+testing <- testing[,colSums(is.na(testing)) == 0]
+dim(training)
+dim(testing)
+## Now remove the first 7 outputs as they have few impact on Classe
+training <- training[,-c(1:7)]
+testing <- testing[,-c(1:7)]
+dim(training)
+dim(testing)
+```
+### Preparation for Prediction
+```{r}
+inTrain <- createDataPartition(training$classe, p = 0.7, list = FALSE)
+trainData <- training[inTrain, ]
+testData <- training[-inTrain,]
+NZV <- nearZeroVar(trainData)
+trainData <- trainData[, -NZV]
+testData  <- testData[, -NZV]
+dim(trainData)
+```
+### Prediction Model Building
+Three prediction models will be used, which are random forest, decision tree and generalized boosted model.
+#### 1. Random Forest
+```{r}
+set.seed(12345)
+controlrf <- trainControl(method="cv", number=3, verboseIter=FALSE)
+rf <- train(classe ~ ., trainData, method="rf",trControl=controlrf)
+rf$finalModel
+modelrf <- predict(rf, testData)
+conf <- confusionMatrix(modelrf,testData$classe)
+conf
+```
+The accurarcy is very high for random forest prediction method, which is 0.9946.However, it might be the reason of overfitting.
+```{r}
+plot(modelrf)
+```
+
+#### 2. Decision Tree
+```{r}
+modelrp <- rpart(classe ~ ., trainData, method="class")
+fancyRpartPlot(modelrp)
+trainpred <- predict(modelrp, testData, type = "class")
+confrp <- confusionMatrix(testData$classe,trainpred)
+```
+
+The accuracy for decision tree is 0.75, which is not as accurate as generalized boosted and random forest.
+
+#### 3. Generalized Boosted 
+```{r}
+set.seed(12345)
+controlgbm <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modelgbm  <- train(classe ~ ., data=trainData, method = "gbm",
+                    trControl = controlgbm, verbose = FALSE)
+modelgbm$finalModel
+predictgbm <- predict(modelgbm, newdata=testData)
+confgbm <- confusionMatrix(predictgbm, testData$classe)
+confgbm
+```
+The accuracy from gerneralized boosted model is 0.9645, which is also very high.
+
+### Applying selected model to testing data
+
+The accuracy of the 3 regression modeling methods are:
+
+Random Forest : 0.9963
+Decision Tree : 0.7514
+GBM : 0.9645
+```{r}
+predictTest <- predict(rf,testing)
+predictTest
+```
